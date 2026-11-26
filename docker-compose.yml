@@ -1,0 +1,61 @@
+# ==============================================================================
+# Zefra / PayCore - Docker Compose cho môi trường phát triển (Local Dev)
+# Khởi chạy: docker compose up -d
+# Dừng:      docker compose down
+# ==============================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: paycore-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-paycore}
+      POSTGRES_USER: ${POSTGRES_USER:-paycore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-paycore_secret}
+      # Chuẩn hóa múi giờ UTC để tránh sai lệch timestamp khi đối soát sổ cái (ledger)
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - paycore_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-paycore} -d ${POSTGRES_DB:-paycore}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - paycore-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: paycore-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD:-paycore_redis_secret}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - paycore_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-paycore_redis_secret}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - paycore-network
+
+volumes:
+  paycore_postgres_data:
+    driver: local
+  paycore_redis_data:
+    driver: local
+
+networks:
+  paycore-network:
+    driver: bridge
